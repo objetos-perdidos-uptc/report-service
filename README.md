@@ -3,32 +3,53 @@
 Microservicio de reportes de objetos perdidos y encontrados (Persona 2).
 
 - **Lenguaje:** Node.js 22 + Express
-- **Persistencia:** PostgreSQL con ORM Sequelize y patrón DTO (`src/dto`)
+- **Arquitectura:** Hexagonal (puertos y adaptadores) + DDD, con eventos de dominio listos para EDA
+- **Persistencia:** PostgreSQL con ORM Sequelize y patrón DTO (`src/application/dto`)
 - **Puerto:** 8082
 - **Nombre en Eureka:** `REPORT-SERVICE`
 - **Swagger:** http://localhost:8082/docs (JSON en `/openapi.json`)
 
-## Estructura
+## Arquitectura
+
+Las dependencias apuntan siempre hacia adentro: la infraestructura conoce a la aplicación y al
+dominio, pero el dominio no conoce Express, Sequelize, Eureka ni ningún framework.
 
 ```
 src/
-  index.js          arranque: BD, HTTP, cron y Eureka
-  app.js            Express, Swagger y rutas
-  config.js         variables de entorno
-  db.js             conexión Sequelize (crea la base si no existe)
-  eureka.js         registro, heartbeat y descubrimiento de servicios
-  routes/           /reports (público) e /internal (entre microservicios)
-  controllers/      capa HTTP
-  services/         reglas de negocio
-  repositories/     consultas con el ORM
-  models/           entidades: Report, Photo, Category
-  dto/              validación de entrada y DTOs de salida
-  clients/          llamadas a matching-service
-  jobs/             cron de expiración
-  middlewares/      usuario del Gateway, subida de fotos, errores
-  docs/             especificación OpenAPI
-tests/              pruebas unitarias de los DTO
+  domain/                     NÚCLEO: reglas de negocio puras, sin frameworks
+    report.js                 agregado Report (crear, editar, cerrar, expirar, renovar, fotos)
+    photo.js                  entidad Photo (parte del agregado)
+    value-objects.js          ReportType, ReportStatus, CloseReason, Location, PrivateFeature, ExpirationPolicy
+    events.js                 eventos de dominio (report.created, report.closed, ...)
+    ports.js                  puertos de salida: ReportRepository, EventPublisher, PhotoStorage
+    errors.js                 errores de dominio (validación, regla de negocio, no encontrado, prohibido)
+  application/                CASOS DE USO: orquestan el dominio usando solo los puertos
+    use-cases/                comandos: create, update, close, renew, fotos, cambiar estado, expirar, verificar
+    queries/                  consultas: feed, búsqueda, historial, detalle, por expirar, estadísticas
+    dto/                      request -> comando y agregado -> respuesta (público / interno)
+  infrastructure/             ADAPTADORES: la tecnología concreta
+    http/                     entrada REST (Express): rutas, controladores, middlewares, Swagger
+    persistence/              salida: repositorio Sequelize + PostgreSQL (implementa ReportRepository)
+    messaging/                salida: publicador de eventos en memoria (implementa EventPublisher)
+    storage/                  salida: fotos en disco (implementa PhotoStorage)
+    discovery/                Eureka y cliente HTTP de matching-service
+    scheduling/               entrada programada: cron de expiración
+    config.js                 variables de entorno
+  container.js                raíz de composición: decide qué adaptador implementa cada puerto
+  index.js                    arranque
+tests/
+  domain/                     reglas del agregado, sin base de datos
+  application/                DTOs
+  infrastructure/             API HTTP completa con un repositorio en memoria
+  support/                    adaptador en memoria (implementa el mismo puerto que Sequelize)
 ```
+
+Flujo de un comando: `HTTP -> controlador -> DTO -> caso de uso -> agregado Report -> repositorio
+(guardar) -> EventPublisher (publicar eventos)`.
+
+Hoy los eventos se reparten dentro del proceso: se registran en el log y un puente llama por HTTP a
+matching-service. El siguiente paso es un adaptador de RabbitMQ/Kafka que implemente el mismo
+puerto `EventPublisher`; solo cambia `container.js`.
 
 ## Configuración
 
