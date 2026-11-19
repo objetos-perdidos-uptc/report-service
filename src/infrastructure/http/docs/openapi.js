@@ -297,7 +297,18 @@ export const openapi = {
     },
 
     '/health': {
-      get: { tags: ['infra'], summary: 'Estado del servicio (lo consulta Eureka)', responses: { 200: ok('UP') } },
+      get: {
+        tags: ['infra'],
+        summary: 'Estado del servicio y de la conexión con RabbitMQ (lo consulta Eureka)',
+        responses: { 200: ok('UP') },
+      },
+    },
+    '/metrics': {
+      get: {
+        tags: ['infra'],
+        summary: 'Métricas para Prometheus (peticiones, eventos de dominio, reportes por estado, RabbitMQ)',
+        responses: { 200: { description: 'Formato de texto de Prometheus', content: { 'text/plain': {} } } },
+      },
     },
   },
   components: {

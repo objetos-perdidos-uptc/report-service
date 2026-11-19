@@ -98,6 +98,16 @@ test('flujo completo de un reporte por HTTP', async () => {
   ])
 })
 
+test('métricas para Prometheus', async () => {
+  const res = await fetch(`${base}/metrics`)
+  const text = await res.text()
+  assert.equal(res.status, 200)
+  assert.match(text, /report_domain_events_total\{type="report.created",service="report-service"\} \d+/)
+  assert.match(text, /reports_by_status\{status="CLOSED",service="report-service"\} 1/)
+  assert.match(text, /http_requests_total\{method="POST",route="\/reports\/",status="201"/)
+  assert.match(text, /rabbitmq_connected\{service="report-service"\} 0/)
+})
+
 test('expiración por inactividad (HU-16) y reportes por expirar (HU-25)', async () => {
   const { body } = await call('POST', '/reports', {
     body: { type: 'FOUND', name: 'Paraguas', categoryId: 1, dateOfDiscovery: '2026-10-01T10:00:00Z' },

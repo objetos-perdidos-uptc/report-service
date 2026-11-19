@@ -23,6 +23,9 @@ export class ReportRepository {
   /** Reportes ACTIVE cuya última actividad es anterior a `before` (y posterior a `after`, si se pasa). */
   async findActiveByLastActivity({ before, after }) { notImplemented('ReportRepository', 'findActiveByLastActivity') }
 
+  /** @returns {Promise<Record<string, number>>} cantidad de reportes por estado, p. ej. { ACTIVE: 3 } */
+  async countByStatus() { notImplemented('ReportRepository', 'countByStatus') }
+
   async findCategories() { notImplemented('ReportRepository', 'findCategories') }
 
   async categoryExists(categoryId) { notImplemented('ReportRepository', 'categoryExists') }

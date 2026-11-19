@@ -127,6 +127,11 @@ export class SequelizeReportRepository extends ReportRepository {
     return rows.map(toDomain)
   }
 
+  async countByStatus() {
+    const rows = await ReportModel.count({ group: ['status'] })
+    return Object.fromEntries(rows.map((r) => [r.status, Number(r.count)]))
+  }
+
   findCategories() {
     return CategoryModel.findAll({ order: [['categoryId', 'ASC']], raw: true })
   }

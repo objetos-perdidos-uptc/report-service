@@ -26,6 +26,11 @@ export const config = {
   reminderDays: Number(env.REMINDER_DAYS || 3),
   expirationCron: env.EXPIRATION_CRON || '0 2 * * *',
 
-  // Nombres con los que los otros servicios se registran en Eureka
-  matchingService: env.MATCHING_SERVICE || 'matching-service',
+  // Event bus (EDA). Sin RABBITMQ_URL los eventos solo se registran en el log.
+  rabbitmq: {
+    url: env.RABBITMQ_URL || null,
+    reportsExchange: env.REPORTS_EXCHANGE || 'reports.events',   // donde publica este servicio
+    claimsExchange: env.CLAIMS_EXCHANGE || 'claims.events',      // donde publica claim-service
+    claimsQueue: env.CLAIMS_QUEUE || 'report-service.claim-events',
+  },
 }

@@ -30,7 +30,9 @@ src/
   infrastructure/             ADAPTADORES: la tecnología concreta
     http/                     entrada REST (Express): rutas, controladores, middlewares, Swagger
     persistence/              salida: repositorio Sequelize + PostgreSQL (implementa ReportRepository)
-    messaging/                salida: publicador de eventos en memoria (implementa EventPublisher)
+    messaging/                EDA: publicador en memoria y en RabbitMQ (implementan EventPublisher)
+                              y consumidor de eventos de claim-service (adaptador de entrada)
+    monitoring/               métricas de Prometheus (/metrics)
     storage/                  salida: fotos en disco (implementa PhotoStorage)
     discovery/                Eureka y cliente HTTP de matching-service
     scheduling/               entrada programada: cron de expiración
@@ -47,9 +49,9 @@ tests/
 Flujo de un comando: `HTTP -> controlador -> DTO -> caso de uso -> agregado Report -> repositorio
 (guardar) -> EventPublisher (publicar eventos)`.
 
-Hoy los eventos se reparten dentro del proceso: se registran en el log y un puente llama por HTTP a
-matching-service. El siguiente paso es un adaptador de RabbitMQ/Kafka que implemente el mismo
-puerto `EventPublisher`; solo cambia `container.js`.
+Los eventos pasan primero por un bus en memoria (que los registra en el log) y, si hay
+`RABBITMQ_URL`, se reenvían a RabbitMQ. Un decorador del mismo puerto los cuenta para Prometheus.
+Ver [Eventos (EDA)](#eventos-eda).
 
 ## Configuración
 
@@ -68,6 +70,9 @@ Copiar `.env.example` a `.env` y ajustar. Usa los mismos nombres de variables qu
 | `EXPIRATION_DAYS` | `30` | Días sin actividad para expirar (HU-16) |
 | `REMINDER_DAYS` | `3` | Anticipación del recordatorio (HU-25) |
 | `EXPIRATION_CRON` | `0 2 * * *` | Cuándo corre el cron de expiración |
+| `RABBITMQ_URL` | *(vacío)* | Broker de eventos, p. ej. `amqp://guest:guest@rabbitmq:5672`. Vacío = solo log |
+| `REPORTS_EXCHANGE` | `reports.events` | Exchange donde este servicio publica sus eventos |
+| `CLAIMS_EXCHANGE` / `CLAIMS_QUEUE` | `claims.events` / `report-service.claim-events` | De dónde escucha los eventos de claim-service |
 
 Las tablas (`reports`, `report_photos`, `categories`) las crea el ORM al arrancar, y las categorías
 base se cargan la primera vez.
@@ -132,11 +137,76 @@ Eureka, p. ej. `http://report-service:8082/internal/reports/1`.
 `creationDate`, `dateLost`, `reward`, `dateOfDiscovery`, `custodyLocation`) más `userId`, `status` y
 fechas del ciclo de vida. Nunca incluye la característica privada.
 
-## Integración con matching-service
+## Eventos (EDA)
 
-Al crear, editar o renovar un reporte se llama a `POST /matching/evaluate/{reportId}`, y al cerrarlo
-o expirarlo a `DELETE /matching/report/{reportId}`. Son llamadas "best effort": si matching-service
-no está registrado en Eureka, el reporte se guarda igual y solo queda un aviso en el log.
+El servicio se comunica con los demás de forma asíncrona por **RabbitMQ**.
+
+### Publica: exchange `reports.events` (tipo `topic`, durable)
+
+| Routing key | Cuándo |
+|---|---|
+| `report.created` | Se registra un reporte (HU-03, HU-04) |
+| `report.updated` | El dueño edita el reporte (HU-06) |
+| `report.photos-changed` | Se agregan o quitan fotos |
+| `report.renewed` | Se renueva un reporte (HU-25) |
+| `report.closed` | Se cierra (dueño o reclamo aprobado) |
+| `report.expired` | Expira por inactividad (HU-16) |
+
+Cuerpo (JSON). `report` es una copia completa del reporte **sin la característica privada**, para que
+quien consuma no tenga que volver a pedirle datos a este servicio:
+
+```json
+{
+  "eventId": "818ffa55-546f-4cca-9cde-5856ba75864a",
+  "type": "report.created",
+  "occurredAt": "2026-11-19T12:40:14.477Z",
+  "aggregateId": 3,
+  "report": { "reportId": 3, "type": "FOUND", "status": "ACTIVE", "name": "Celular Samsung",
+              "categoryId": 1, "campusId": 1, "userId": 7, "color": "negro", "location": null,
+              "photos": [], "dateOfDiscovery": "2026-11-18T09:00:00.000Z", "...": "..." },
+  "data": {}
+}
+```
+
+Cada consumidor crea **su propia cola durable** y la enlaza al exchange. Por ejemplo, matching-service
+con el patrón `report.*` recibe todo; notification-service podría escuchar solo `report.expired`.
+
+Los mensajes son persistentes y el servicio espera la confirmación del broker. Si RabbitMQ está caído,
+la operación del usuario no falla: los eventos quedan en espera en memoria y se envían al reconectar
+(métrica `report_events_pending`).
+
+### Escucha: exchange `claims.events` → cola `report-service.claim-events`
+
+| Routing key | Efecto |
+|---|---|
+| `claim.approved` / `claim.delivered` | Cierra el reporte como `RECOVERED` y lo saca del feed |
+
+Cuerpo esperado: `{ "claimId": "...", "reportId": 12 }`. Es idempotente: si el reporte ya estaba
+cerrado o no existe, el mensaje se descarta sin error.
+
+## Monitoreo (Prometheus)
+
+`GET /metrics` (directo al servicio, no pasa por el Gateway) expone, además de CPU y memoria de Node.js:
+
+| Métrica | Qué mide |
+|---|---|
+| `http_requests_total{method,route,status}` | Peticiones atendidas |
+| `http_request_duration_seconds{method,route,status}` | Tiempo de respuesta (histograma) |
+| `report_domain_events_total{type}` | Transacciones del negocio: reportes creados, cerrados, expirados... |
+| `reports_by_status{status}` | Reportes activos, cerrados y expirados en la base |
+| `rabbitmq_connected` | 1 si hay conexión con RabbitMQ |
+| `report_events_pending` | Eventos esperando a que vuelva RabbitMQ |
+
+Configuración de Prometheus:
+
+```yaml
+scrape_configs:
+  - job_name: report-service
+    static_configs:
+      - targets: ['report-service:8082']
+```
+
+`GET /health` también informa el estado de RabbitMQ (`UP`, `DOWN` o `DISABLED`).
 
 ## Expiración (HU-16)
 

@@ -85,6 +85,12 @@ export class InMemoryReportRepository extends ReportRepository {
     row.lastActivityDate = new Date(row.lastActivityDate.getTime() - days * 86_400_000)
   }
 
+  async countByStatus() {
+    const counts = {}
+    for (const row of this.#rows.values()) counts[row.status] = (counts[row.status] ?? 0) + 1
+    return counts
+  }
+
   async findCategories() { return this.#categories }
 
   async categoryExists(categoryId) { return this.#categories.some((c) => c.categoryId === categoryId) }
