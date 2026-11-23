@@ -115,6 +115,11 @@ test('expiración por inactividad (HU-16) y reportes por expirar (HU-25)', async
   reports.age(body.reportId, 28)
   assert.equal((await call('GET', '/internal/reports/expiring?days=3')).body[0].reportId, body.reportId)
 
+  // HU-25: el cron emite report.expiring-soon una sola vez
+  assert.equal(await container.commands.sendExpirationReminders.execute(), 1)
+  assert.equal(published.at(-1).type, 'report.expiring-soon')
+  assert.equal(await container.commands.sendExpirationReminders.execute(), 0)
+
   reports.age(body.reportId, 3)
   assert.equal(await container.commands.expireInactiveReports.execute(), 1)
   assert.equal((await call('GET', `/internal/reports/${body.reportId}`)).body.status, 'EXPIRED')

@@ -151,6 +151,7 @@ El servicio se comunica con los demás de forma asíncrona por **RabbitMQ**.
 | `report.renewed` | Se renueva un reporte (HU-25) |
 | `report.closed` | Se cierra (dueño o reclamo aprobado) |
 | `report.expired` | Expira por inactividad (HU-16) |
+| `report.expiring-soon` | Faltan `REMINDER_DAYS` días para que expire; se emite una sola vez (HU-25). `data.expiresAt` trae la fecha |
 
 Cuerpo (JSON). `report` es una copia completa del reporte **sin la característica privada**, para que
 quien consuma no tenga que volver a pedirle datos a este servicio:
@@ -208,8 +209,10 @@ scrape_configs:
 
 `GET /health` también informa el estado de RabbitMQ (`UP`, `DOWN` o `DISABLED`).
 
-## Expiración (HU-16)
+## Expiración y recordatorio (HU-16, HU-25)
 
-Un cron (`EXPIRATION_CRON`, por defecto todos los días a las 2:00) pasa a `EXPIRED` los reportes
+Un cron (`EXPIRATION_CRON`, por defecto todos los días a las 2:00) primero publica
+`report.expiring-soon` para los reportes que expiran en los próximos `REMINDER_DAYS` días (HU-25) y
+luego pasa a `EXPIRED` los reportes
 `ACTIVE` con más de `EXPIRATION_DAYS` días sin actividad. También corre una vez al arrancar. Editar
 o renovar un reporte reinicia el conteo.

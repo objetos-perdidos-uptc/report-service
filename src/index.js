@@ -4,11 +4,12 @@ import * as eureka from './infrastructure/discovery/eureka.js'
 import { createApp } from './infrastructure/http/app.js'
 import { startClaimEventsConsumer } from './infrastructure/messaging/claim-events.consumer.js'
 import { initDb, sequelize } from './infrastructure/persistence/db.js'
-import { seedCategories } from './infrastructure/persistence/models.js'
+import { migrateSchema, seedCategories } from './infrastructure/persistence/models.js'
 import { startExpirationJob } from './infrastructure/scheduling/expiration.job.js'
 
 // 1. PostgreSQL: conexión, tablas y categorías base
 await initDb()
+await migrateSchema()
 await seedCategories()
 
 // 2. Conectar puertos con adaptadores
@@ -30,8 +31,8 @@ const server = createApp(container).listen(config.port, () => {
   console.log(`${config.appName} escuchando en el puerto ${config.port} (Swagger: /docs, métricas: /metrics)`)
 })
 
-// 5. Cron de expiración
-startExpirationJob(container.commands.expireInactiveReports, config.expirationCron)
+// 5. Cron: recordatorios (HU-25) y expiración (HU-16)
+startExpirationJob(container.commands, config.expirationCron)
 
 // 6. Eureka: registrar y arrancar heartbeat
 eureka.register().then(eureka.startHeartbeat)

@@ -4,6 +4,7 @@ import { ChangeReportStatus } from './application/use-cases/change-report-status
 import { CloseReport } from './application/use-cases/close-report.js'
 import { CreateReport } from './application/use-cases/create-report.js'
 import { ExpireInactiveReports } from './application/use-cases/expire-inactive-reports.js'
+import { SendExpirationReminders } from './application/use-cases/send-expiration-reminders.js'
 import { AddReportPhotos, RemoveReportPhoto } from './application/use-cases/manage-photos.js'
 import { RenewReport } from './application/use-cases/renew-report.js'
 import { UpdateReport } from './application/use-cases/update-report.js'
@@ -30,7 +31,7 @@ export function buildContainer(adapters = {}) {
   registerStateMetrics({ reports, rabbitmq: messaging.rabbitmq, publisher: messaging.rabbitPublisher })
 
   const policy = new ExpirationPolicy(config.expirationDays)
-  const deps = { reports, events, storage, policy, maxPhotos: config.maxPhotos }
+  const deps = { reports, events, storage, policy, maxPhotos: config.maxPhotos, reminderDays: config.reminderDays }
 
   return {
     policy,
@@ -44,6 +45,7 @@ export function buildContainer(adapters = {}) {
       removeReportPhoto: new RemoveReportPhoto(deps),
       changeReportStatus: new ChangeReportStatus(deps),
       expireInactiveReports: new ExpireInactiveReports(deps),
+      sendExpirationReminders: new SendExpirationReminders(deps),
       verifyPrivateFeature: new VerifyPrivateFeature(deps),
     },
     queries: new ReportQueries({ reports, policy, reminderDays: config.reminderDays }),

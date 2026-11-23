@@ -89,3 +89,21 @@ test('la política de expiración calcula la fecha límite', () => {
   assert.equal(policy.expiresAt('2026-10-01T00:00:00Z').toISOString(), '2026-10-31T00:00:00.000Z')
   assert.equal(policy.inactiveSince(new Date('2026-10-31T00:00:00Z')).toISOString(), '2026-10-01T00:00:00.000Z')
 })
+
+test('HU-25: el recordatorio de expiración se emite una sola vez y la actividad lo reinicia', () => {
+  const report = saved(lost())
+  const expiresAt = new Date('2026-12-01T00:00:00Z')
+  assert.equal(report.remindExpiration(expiresAt), true)
+  assert.equal(report.remindExpiration(expiresAt), false, 'no se repite')
+  const [event] = report.pullEvents()
+  assert.equal(event.type, ReportEvents.EXPIRING_SOON)
+  assert.equal(event.data.expiresAt, '2026-12-01T00:00:00.000Z')
+
+  report.renew()
+  assert.equal(report.reminderSentAt, null)
+  assert.equal(report.remindExpiration(expiresAt), true, 'tras renovar se puede volver a avisar')
+
+  report.close('CANCELLED')
+  report.reminderSentAt = null
+  assert.equal(report.remindExpiration(expiresAt), false, 'un reporte cerrado no recibe recordatorio')
+})

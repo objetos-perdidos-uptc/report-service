@@ -39,6 +39,7 @@ export class Report {
     this.lastActivityDate = props.lastActivityDate ?? null
     this.closedAt = props.closedAt ?? null
     this.closeReason = props.closeReason ?? null
+    this.reminderSentAt = props.reminderSentAt ?? null
   }
 
   // ---------- Creación ----------
@@ -90,7 +91,7 @@ export class Report {
     }
     this.#discardFieldsOfOtherType()
     this.#checkInvariants()
-    this.lastActivityDate = now
+    this.#touch(now)
     this.#record(ReportEvents.UPDATED, { fields }, now)
   }
 
@@ -112,13 +113,25 @@ export class Report {
     this.#record(ReportEvents.EXPIRED, {}, now)
   }
 
+  /**
+   * HU-25: avisa que el reporte está por expirar, para que el dueño pueda renovarlo.
+   * Se avisa una sola vez por periodo de inactividad: cualquier actividad reinicia el aviso.
+   * @returns {boolean} true si se emitió el recordatorio
+   */
+  remindExpiration(expiresAt, now = new Date()) {
+    if (!this.isActive() || this.reminderSentAt) return false
+    this.reminderSentAt = now
+    this.#record(ReportEvents.EXPIRING_SOON, { expiresAt: new Date(expiresAt).toISOString() }, now)
+    return true
+  }
+
   /** HU-25: renueva un reporte activo o expirado; reinicia el conteo de inactividad. */
   renew(now = new Date()) {
     if (this.status === ReportStatus.CLOSED) throw new BusinessRuleError('Un reporte cerrado no se puede renovar')
     this.status = ReportStatus.ACTIVE
     this.closeReason = null
     this.closedAt = null
-    this.lastActivityDate = now
+    this.#touch(now)
     this.#record(ReportEvents.RENEWED, {}, now)
   }
 
@@ -130,7 +143,7 @@ export class Report {
       throw new BusinessRuleError(`Un reporte admite máximo ${maxPhotos} fotos`)
     }
     this.photos.push(...filenames.map((f) => Photo.create(f)))
-    this.lastActivityDate = now
+    this.#touch(now)
     this.#record(ReportEvents.PHOTOS_CHANGED, { added: filenames.length }, now)
   }
 
@@ -188,6 +201,12 @@ export class Report {
   }
 
   // ---------- Reglas internas ----------
+
+  /** Registra actividad: reinicia el conteo de expiración y el recordatorio. */
+  #touch(now) {
+    this.lastActivityDate = now
+    this.reminderSentAt = null
+  }
 
   #assertActive(message) {
     if (!this.isActive()) throw new BusinessRuleError(message)

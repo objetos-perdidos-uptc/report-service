@@ -9,6 +9,7 @@ export const ReportEvents = Object.freeze({
   RENEWED: 'report.renewed',
   CLOSED: 'report.closed',
   EXPIRED: 'report.expired',
+  EXPIRING_SOON: 'report.expiring-soon',
   PHOTOS_CHANGED: 'report.photos-changed',
 })
 

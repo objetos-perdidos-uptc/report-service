@@ -64,6 +64,7 @@ function toRow(report) {
     lastActivityDate: report.lastActivityDate,
     closedAt: report.closedAt,
     closeReason: report.closeReason,
+    reminderSentAt: report.reminderSentAt,
   }
 }
 

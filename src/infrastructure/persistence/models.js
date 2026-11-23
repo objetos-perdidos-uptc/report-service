@@ -41,6 +41,7 @@ export const ReportModel = sequelize.define('Report', {
   lastActivityDate: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   closedAt: DataTypes.DATE,
   closeReason: DataTypes.STRING(40),
+  reminderSentAt: DataTypes.DATE,   // HU-25: cuándo se avisó que el reporte está por expirar
 }, {
   tableName: 'reports',
   underscored: true,
@@ -71,4 +72,17 @@ const DEFAULT_CATEGORIES = [
 export async function seedCategories() {
   if (await CategoryModel.count() > 0) return
   await CategoryModel.bulkCreate(DEFAULT_CATEGORIES.map((name) => ({ name })))
+}
+
+/**
+ * Migraciones simples: sync() crea tablas nuevas pero no agrega columnas a tablas que ya existen.
+ * Aquí se agregan las columnas que se sumaron después de la primera versión, sin perder datos.
+ */
+export async function migrateSchema() {
+  const qi = sequelize.getQueryInterface()
+  const columns = await qi.describeTable('reports')
+  if (!columns.reminder_sent_at) {
+    await qi.addColumn('reports', 'reminder_sent_at', { type: DataTypes.DATE })
+    console.log('PostgreSQL: columna reports.reminder_sent_at agregada')
+  }
 }
