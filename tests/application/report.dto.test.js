@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { fromCreateRequest, fromUpdateRequest, toInternalDTO, toPublicDTO } from '../../src/application/dto/report.dto.js'
+import { fromCreateRequest, fromUpdateRequest, toInternalDTO, toMatchingDTO, toPublicDTO } from '../../src/application/dto/report.dto.js'
 import { Report } from '../../src/domain/report.js'
 import { ExpirationPolicy } from '../../src/domain/value-objects.js'
 
@@ -42,4 +42,26 @@ test('DTO público: privateFeature solo para el dueño y nunca el userId; el int
   assert.equal('userId' in toPublicDTO(report, '8', policy), false)
   assert.equal('privateFeature' in toInternalDTO(report, policy), false)
   assert.equal(toInternalDTO(report, policy).userId, 7)
+})
+
+test('DTO para matching-service: snake_case, location_text y location solo con coordenadas', () => {
+  const report = Report.create(fromCreateRequest(body, user))
+  report.reportId = 3
+  const dto = toMatchingDTO(report)
+  assert.equal(dto.report_id, 3)
+  assert.equal(dto.user_id, 7)
+  assert.equal(dto.report_type, 'LOST')
+  assert.equal(dto.category_id, 5)
+  assert.equal(dto.campus_id, 1)
+  assert.equal(dto.date_lost.toISOString(), '2026-10-01T10:00:00.000Z')
+  assert.equal(dto.date_found, null)
+  assert.deepEqual(dto.location, { latitude: 5.55, longitude: -73.35 })
+  assert.equal(dto.location_text, 'Biblioteca')
+  assert.equal('privateFeature' in dto, false)
+
+  // Sin mapa: solo texto → location va null (si no, Pydantic respondería 422)
+  const textOnly = Report.create(fromCreateRequest({ ...body, location: { textDirection: 'Bloque B' } }, user))
+  textOnly.reportId = 4
+  assert.equal(toMatchingDTO(textOnly).location, null)
+  assert.equal(toMatchingDTO(textOnly).location_text, 'Bloque B')
 })

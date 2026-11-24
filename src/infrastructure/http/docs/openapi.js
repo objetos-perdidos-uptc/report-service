@@ -227,6 +227,7 @@ export const openapi = {
           query('campusId', { type: 'integer' }),
           query('categoryId', { type: 'integer' }),
           query('userId', { type: 'integer' }),
+          query('format', { type: 'string', enum: ['matching'] }, 'matching = contrato snake_case de matching-service'),
         ],
         responses: { 200: ok('Lista de reportes', { type: 'array', items: ref('InternalReport') }) },
       },
@@ -235,8 +236,16 @@ export const openapi = {
       get: {
         tags: ['internal'],
         summary: 'Reporte completo, incluido el dueño (sin la característica privada)',
-        parameters: [idParam],
+        parameters: [idParam, query('format', { type: 'string', enum: ['matching'] }, 'matching = contrato snake_case de matching-service')],
         responses: { 200: ok('Reporte', ref('InternalReport')), 404: problem('No existe') },
+      },
+    },
+    '/internal/reports/{id}/matching-request': {
+      get: {
+        tags: ['internal'],
+        summary: 'Cuerpo listo para POST /api/v1/matches/evaluate (target_report + candidatos del tipo contrario, misma sede, ACTIVE)',
+        parameters: [idParam],
+        responses: { 200: ok('MatchRequest de matching-service'), 404: problem('No existe') },
       },
     },
     '/internal/reports/{id}/verify-private-feature': {

@@ -104,6 +104,33 @@ export function toInternalDTO(report, policy) {
   return { ...report.snapshot(), expirationDate: policy.expiresAt(report.lastActivityDate) }
 }
 
+/**
+ * Contrato de matching-service (`ReportSchema` de FastAPI, en snake_case). Es una capa
+ * anticorrupción: el dominio no cambia; solo se traduce al formato que el otro servicio espera.
+ * - `location` solo va si hay latitud y longitud (Pydantic las exige como float).
+ * - `location_text` lleva el lugar escrito por el usuario (no manejamos mapa).
+ */
+export function toMatchingDTO(report) {
+  const s = report.snapshot()
+  const loc = s.location
+  const hasCoords = loc?.latitude != null && loc?.longitude != null
+  return {
+    report_id: Number(s.reportId),
+    user_id: Number(s.userId),
+    report_type: s.type,
+    name: s.name,
+    description: s.description ?? '',
+    category_id: Number(s.categoryId),
+    campus_id: Number(s.campusId),
+    color: s.color ?? null,
+    material: s.material ?? null,
+    date_lost: s.dateLost ?? null,
+    date_found: s.dateOfDiscovery ?? null,
+    location: hasCoords ? { latitude: Number(loc.latitude), longitude: Number(loc.longitude) } : null,
+    location_text: loc?.textDirection ?? null,
+  }
+}
+
 export function toPageDTO({ items, total }, page, size, mapper) {
   return {
     content: items.map(mapper),

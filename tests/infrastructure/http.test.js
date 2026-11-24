@@ -86,6 +86,20 @@ test('flujo completo de un reporte por HTTP', async () => {
   assert.equal(ok.body.matches, true)
   assert.equal('privateFeature' in (await call('GET', `/internal/reports/${id}`)).body, false)
 
+  // Contrato de matching-service
+  const asMatching = (await call('GET', `/internal/reports/${id}?format=matching`)).body
+  assert.equal(asMatching.report_id, id)
+  assert.equal(asMatching.report_type, 'LOST')
+  assert.equal('location_text' in asMatching, true)
+  const found = (await call('POST', '/reports', {
+    user: as(8), body: { type: 'FOUND', name: 'Mochila', categoryId: 1, dateOfDiscovery: '2026-10-02T10:00:00Z', location: { textDirection: 'Bloque B' } },
+  })).body
+  const matchReq = (await call('GET', `/internal/reports/${id}/matching-request`)).body
+  assert.equal(matchReq.target_report.report_id, id)
+  assert.deepEqual(matchReq.candidates.map((c) => c.report_id), [found.reportId])
+  assert.equal(matchReq.candidates[0].location_text, 'Bloque B')
+  assert.equal(matchReq.candidates[0].location, null)
+
   // Cerrar, no renovar cerrado, historial y estadísticas
   assert.equal((await call('PATCH', `/reports/${id}/close`)).body.closeReason, 'RECOVERED_OTHER_MEANS')
   assert.equal((await call('PATCH', `/reports/${id}/renew`)).status, 400)
@@ -94,7 +108,7 @@ test('flujo completo de un reporte por HTTP', async () => {
   assert.equal((await call('GET', '/reports/999')).status, 404)
 
   assert.deepEqual(published.map((e) => e.type), [
-    'report.created', 'report.updated', 'report.photos-changed', 'report.closed',
+    'report.created', 'report.updated', 'report.photos-changed', 'report.created', 'report.closed',
   ])
 })
 

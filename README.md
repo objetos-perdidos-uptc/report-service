@@ -120,12 +120,18 @@ usuario que consulta; en el feed nunca se expone (HU-03).
 
 ## Endpoints internos (`/internal/**`)
 
+> **Formato de matching-service:** `GET /internal/reports` y `GET /internal/reports/{id}` aceptan `?format=matching`
+> y responden con el `ReportSchema` de matching (snake_case): `report_id, user_id, report_type, name, description,
+> category_id, campus_id, color, material, date_lost, date_found, location, location_text`. Como no manejamos mapa,
+> `location` va `null` si no hay coordenadas y el lugar escrito por el usuario viaja en `location_text`.
+
 No pasan por el Gateway. Los otros microservicios los consumen resolviendo `REPORT-SERVICE` en
 Eureka, p. ej. `http://report-service:8082/internal/reports/1`.
 
 | Funcionalidad | Request Mapping | Método HTTP | Parámetro / Tipo de dato | Retorno | Lo usa |
 |---|---|---|---|---|---|
 | Listar reportes para comparar | `/internal/reports` | GET | Query: `type`, `status` (String, por defecto ACTIVE), `campusId`, `categoryId`, `userId` (int) | JSON lista de `InternalReport` | matching-service |
+| Petición lista para matching | `/internal/reports/{id}/matching-request` | GET | Path: `id` (int) | JSON `{target_report, candidates}` en el formato de `POST /api/v1/matches/evaluate` | matching-service |
 | Detalle con dueño | `/internal/reports/{id}` | GET | Path: `id` (int) | JSON `InternalReport` | matching, claim, notification |
 | Validar característica privada (HU-12) | `/internal/reports/{id}/verify-private-feature` | POST | Body JSON: `privateFeature` (String) | JSON `{reportId, hasPrivateFeature, matches}` | claim-service |
 | Cambiar estado (HU-14) | `/internal/reports/{id}/status` | PATCH | Body JSON: `status` (String), `reason` (String, por defecto RECOVERED al cerrar) | JSON `InternalReport` | claim-service |

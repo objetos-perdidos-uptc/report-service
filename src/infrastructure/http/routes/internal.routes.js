@@ -9,6 +9,7 @@ export function internalRouter(c) {
   router.get('/reports/expiring', wrap(c.expiring))
   router.get('/reports/stats', wrap(c.stats))
   router.get('/reports/:id', wrap(c.detail))
+  router.get('/reports/:id/matching-request', wrap(c.matchingRequest))
   router.post('/reports/:id/verify-private-feature', wrap(c.verifyPrivateFeature))
   router.patch('/reports/:id/status', wrap(c.setStatus))
   return router
